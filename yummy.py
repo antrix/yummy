@@ -32,7 +32,7 @@ config_file = os.path.expanduser('~/.yummy.cfg')
 state_file = os.path.expanduser('~/.yummy.state')
 
 # Set to logging.DEBUG for debug messages
-LOG_LEVEL = logging.DEBUG
+LOG_LEVEL = logging.INFO
 
 # End configuration
 

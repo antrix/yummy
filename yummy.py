@@ -37,10 +37,8 @@ LOG_LEVEL = logging.INFO
 # End configuration
 
 class Post(object):
-    """Class to model a del.icio.us Post. It works like a struct/dict 
-    like object which limits keys to a retricted subset, i.e. those
-    used in a del.icio.us post.
-    """
+    """Class to model a del.icio.us Post. It limits attributes 
+    to a retricted subset, i.e. those used in a del.icio.us post."""
 
     __slots__ = ['description', 'url', 'extended', 'tags']
 
@@ -64,6 +62,7 @@ def posts(feed):
         d = Post()
         d.description = entry.title
         d.url = entry.link
+        d.tags = "linker via:greader" # TODO: this should be configurable
         for content in entry.content:
             if content.base.startswith(
                     'http://www.google.com/reader/public/atom/user/'):
@@ -111,8 +110,6 @@ class Yummy(object):
                 logging.debug('Skipping already processed URL: %s' % post.url)
                 continue
 
-            post.tags = "linker via:greader" #TODO: this should be configurable
-
             params = urllib.urlencode(post)
             logging.debug('Posting url: %s' % self._endpoint + params)
             try:
@@ -147,7 +144,7 @@ if __name__ == '__main__':
 
     config = ConfigParser.ConfigParser()
     if not config.read(config_file):
-        logging.error('Could not read config file: %s' % CONFIG_FILE)
+        logging.error('Could not read config file: %s' % config_file)
         sys.exit(1)
 
     username = config.get('yummy', 'user')

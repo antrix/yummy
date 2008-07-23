@@ -11,7 +11,7 @@ import xml.etree.cElementTree as ET
 import ConfigParser
 
 __author__      = 'Deepak Sarda'
-__version__     = '0.1'
+__version__     = '0.1.1'
 __copyright__   = '(c) 2008 Deepak Sarda'
 __license__     = 'Public Domain'
 __url__         = 'http://antrix.net/'
@@ -51,7 +51,8 @@ class Post(object):
 
     # urllib.urlencode() just needs this beyond the basic stuff above
     def items(self):
-        return [(k, getattr(self, k)) for k in self.__slots__ if k in self]
+        return [(k, getattr(self, k).encode('utf-8')) 
+                        for k in self.__slots__ if k in self]
 
 def posts(feed):
     """Iterates over a Feedparser feed object and returns Posts.

@@ -11,7 +11,7 @@ import xml.etree.cElementTree as ET
 import ConfigParser
 
 __author__      = 'Deepak Sarda'
-__version__     = '0.1.1'
+__version__     = '0.2'
 __copyright__   = '(c) 2008 Deepak Sarda'
 __license__     = 'Public Domain'
 __url__         = 'http://antrix.net/'
@@ -21,10 +21,14 @@ __url__         = 'http://antrix.net/'
 # config file format is as follows
 # ; example ~/.yummy.cfg file
 # [yummy]
-# user = delicious-user-name
-# pass = delicious-password
 # ; source_url is your public shared items feed url from Google Reader
 # source_url = http://www.google.com/reader/public/atom/user/../broadcast
+# [delicious]
+# user = delicious-user-name
+# pass = delicious-password
+# [twitter]
+# user = twitter-user-name
+# pass = twitter-password
 # ; end of config file
 config_file = os.path.expanduser('~/.yummy.cfg')
 
@@ -54,6 +58,9 @@ class Post(object):
         return [(k, getattr(self, k).encode('utf-8')) 
                         for k in self.__slots__ if k in self]
 
+    def __str__(self):
+        return self.url
+
 def posts(feed):
     """Iterates over a Feedparser feed object and returns Posts.
     Tailored for greader shared items feed to return title,
@@ -71,15 +78,98 @@ def posts(feed):
 
         yield d
 
+class Delicious(object):
+    _endpoint = 'https://api.del.icio.us/v1/posts/add?'
+
+    def __init__(self, user, pw):
+        """`user` is the delicious user name
+        `pw` is the delicious password
+        """
+        pass_mgr = urllib2.HTTPPasswordMgrWithDefaultRealm()
+        pass_mgr.add_password(None, 'api.del.icio.us', user, pw)
+        handler = urllib2.HTTPBasicAuthHandler(pass_mgr)
+        self._opener = urllib2.build_opener(handler)
+        self._opener.addheaders = [('User-Agent', 
+                       'yummy - greader->delicious poster (%s)' % __version__)]
+
+    def update(self, post):
+        """Updates delicious with the `post`"""
+
+        logging.debug('delicious post called')
+
+        params = urllib.urlencode(post)
+        logging.debug('Posting url: %s' % self._endpoint + params)
+
+        try:
+            response = self._opener.open(self._endpoint + params)
+            xml = ET.parse(response)
+        except urllib2.HTTPError, exc:
+            logging.error('HTTPError: %d' % (exc.code))
+            return False
+        except urllib2.URLError, exc:
+            logging.error('URL error' % str(exc))
+            return False
+        else:
+            result = xml.getroot()
+            logging.debug('response is: %s: %s' % 
+                                (result.tag, result.get('code')))
+
+            if result.get('code') == 'done':
+                return True
+            else:
+                logging.error('Error posting to delicious.' \
+                        'Response was: %s' % result.get('code'))
+                return False
+            
+class Twitter(object):
+    _endpoint = 'https://twitter.com/statuses/update.xml'
+
+    def __init__(self, user, pw):
+        """`user` is the delicious user name
+        `pw` is the delicious password
+        """
+        pass_mgr = urllib2.HTTPPasswordMgrWithDefaultRealm()
+        pass_mgr.add_password(None, 'twitter.com', user, pw)
+        handler = urllib2.HTTPBasicAuthHandler(pass_mgr)
+        self._opener = urllib2.build_opener(handler)
+        self._opener.addheaders = [('User-Agent', 
+                       'yummy - greader->twitter poster (%s)' % __version__)]
+
+    def update(self, post):
+        """Updates twitter with the `post`"""
+
+        logging.debug('twitter post called for %s' % post)
+
+        status = u"%s %s" % (post.description, post.url)
+        params = urllib.urlencode({'status': status, 'source': 'yummy'})
+
+        logging.debug('Posting url: %s' % self._endpoint + '?' + params)
+
+        try:
+            response = self._opener.open(self._endpoint, body=params)
+            response = response.read()
+        except urllib2.HTTPError, exc:
+            logging.error('HTTPError: %d' % (exc.code))
+            return False
+        except urllib2.URLError, exc:
+            logging.error('URL error' % str(exc))
+            return False
+        else:
+            if 'created_at' in response:
+                return True
+            else:
+                logging.error('Error posting to twitter.' \
+                        'Response was: %s' % response)
+                return False
+
 class Yummy(object):
     _endpoint = 'https://api.del.icio.us/v1/posts/add?'
 
-    def __init__(self, statefile, source_url, user, pw):
+    def __init__(self, statefile, source_url, services):
         """`statefile` is where data about which items have already been
         posted to delicious is saved.
         `source_url` is the Google Reader feed url from which to pick items
-        `user` is the delicious user name
-        `pw` is the delicious password
+        `services` is a list of objects with an `update` method
         """
 
         self._store = statefile
@@ -91,16 +181,10 @@ class Yummy(object):
 
         self._source_url = source_url
 
-        pass_mgr = urllib2.HTTPPasswordMgrWithDefaultRealm()
-        pass_mgr.add_password(None, 'api.del.icio.us', user, pw)
-        handler = urllib2.HTTPBasicAuthHandler(pass_mgr)
-        opener = urllib2.build_opener(handler)
-        opener.addheaders = [('User-Agent', 
-                       'yummy - greader->delicious poster (%s)' % __version__)]
-        urllib2.install_opener(opener)
+        self._services = services
 
     def update(self):
-        """Updates delicious with posts sourced from source_url"""
+        """Updates services with posts sourced from source_url"""
 
         logging.debug('fetching source feed')
         feed = feedparser.parse(self._source_url)
@@ -111,34 +195,22 @@ class Yummy(object):
                 logging.debug('Skipping already processed URL: %s' % post.url)
                 continue
 
-            params = urllib.urlencode(post)
-            logging.debug('Posting url: %s' % self._endpoint + params)
-            try:
-                response = urllib2.urlopen(self._endpoint + params)
-                xml = ET.parse(response)
-            except urllib2.HTTPError, exc:
-                logging.error('HTTPError: %d' % (exc.code))
-            except urllib2.URLError, exc:
-                logging.error('URL error' % str(exc))
-            else:
-                result = xml.getroot()
-                logging.debug('response is: %s: %s' % 
-                                    (result.tag, result.get('code')))
-
-                if result.get('code') == 'done':
-                    self._processed.add(post.url)
+            for service in self._services:
+                logging.debug('Calling service %s for item %s' % (service.__class__.__name__, post))
+                try:
+                    resp = service.update(post)
+                except:
+                    logging.error('Service %s failed posting item %s' % (service.__class__.__name__, post))
                 else:
-                    logging.error('Error posting to delicious.' \
-                            'Response was: %s' % result.get('code'))
+                    self._processed.add(post.url)
             
-            # delicious folks require us to wait a second between requests
-            time.sleep(1)
+            #time.sleep(1)
 
         # Done processing feed. Save state to data store before returning
         logging.debug('Done processing all urls in feed')
-        f = open(self._store, 'w')
-        pickle.dump(self._processed, f)
-        f.close()
+        #f = open(self._store, 'w')
+        #pickle.dump(self._processed, f)
+        #f.close()
 
 if __name__ == '__main__':
     logging.basicConfig(level=LOG_LEVEL)
@@ -148,9 +220,16 @@ if __name__ == '__main__':
         logging.error('Could not read config file: %s' % config_file)
         sys.exit(1)
 
-    username = config.get('yummy', 'user')
-    password = config.get('yummy', 'pass')
     source_url = config.get('yummy', 'source_url')
 
-    y = Yummy(state_file, source_url, username, password)
+    del_username = config.get('delicious', 'user')
+    del_password = config.get('delicious', 'pass')
+
+    twit_username = config.get('twitter', 'user')
+    twit_password = config.get('twitter', 'pass')
+
+    delicious = Delicious(del_username, del_password)
+    twitter = Twitter(twit_username, twit_password)
+
+    y = Yummy(state_file, source_url, (delicious, twitter))
     y.update()

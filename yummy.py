@@ -33,7 +33,7 @@ __url__         = 'http://antrix.net/'
 config_file = os.path.expanduser('~/.yummy.cfg')
 
 # If state file doesn't exist, it will be created
-state_file = os.path.expanduser('~/.yummy.state')
+state_file_prefix = os.path.expanduser('~/.yummy.state')
 
 # Set to logging.DEBUG for debug messages
 LOG_LEVEL = logging.DEBUG
@@ -78,6 +78,10 @@ def posts(feed):
 
         yield d
 
+# TODO: Refactor Delicious & Twitter classes to have 
+# common base-class with save_state() related details
+# moved to base-class
+
 class Delicious(object):
     _endpoint = 'https://api.del.icio.us/v1/posts/add?'
 
@@ -92,8 +96,24 @@ class Delicious(object):
         self._opener.addheaders = [('User-Agent', 
                        'yummy - greader->delicious poster (%s)' % __version__)]
 
+        self._store = state_file_prefix + '.delicious'
+        try:
+            self._processed = pickle.load(open(self._store))
+        except:
+            logging.error('Error loading state file: %s' % self._store)
+            self._processed = set()
+
+    def save_state(self):
+        f = open(self._store, 'w')
+        pickle.dump(self._processed, f)
+        f.close()
+
     def update(self, post):
         """Updates delicious with the `post`"""
+
+        if post.url in self._processed:
+            logging.debug('Skipping already processed URL: %s' % post.url)
+            return True
 
         params = urllib.urlencode(post)
         logging.debug('Posting url: %s' % self._endpoint + params)
@@ -116,6 +136,7 @@ class Delicious(object):
                                 (result.tag, result.get('code')))
 
             if result.get('code') == 'done':
+                self._processed.add(post.url)
                 return True
             else:
                 logging.error('Error posting to delicious.' \
@@ -136,9 +157,25 @@ class Twitter(object):
         self._opener.addheaders = [('User-Agent', 
                        'yummy - greader->twitter poster (%s)' % __version__)]
 
+        self._store = state_file_prefix + '.twitter'
+        try:
+            self._processed = pickle.load(open(self._store))
+        except:
+            logging.error('Error loading state file: %s' % self._store)
+            self._processed = set()
+
+    def save_state(self):
+        f = open(self._store, 'w')
+        pickle.dump(self._processed, f)
+        f.close()
+
     def update(self, post):
         """Updates twitter with the `post`"""
 
+        if post.url in self._processed:
+            logging.debug('Skipping already processed URL: %s' % post.url)
+            return True
+        
         status = u"%s %s" % (post.description, post.url)
         params = urllib.urlencode({'status': status, 'source': 'yummy'})
 
@@ -158,6 +195,7 @@ class Twitter(object):
             return False
         else:
             if 'created_at' in response:
+                self._processed.add(post.url)
                 return True
             else:
                 logging.error('Error posting to twitter.' \
@@ -167,7 +205,7 @@ class Twitter(object):
 class Yummy(object):
     _endpoint = 'https://api.del.icio.us/v1/posts/add?'
 
-    def __init__(self, statefile, source_url, services):
+    def __init__(self, source_url, services):
         """`statefile` is where data about which items have already been
         posted to delicious is saved.
         `source_url` is the Google Reader feed url from which to pick items
@@ -193,10 +231,6 @@ class Yummy(object):
         logging.debug('fetched feed. it has %s entries' % len(feed.entries))
 
         for post in posts(feed):
-            if post.url in self._processed:
-                logging.debug('Skipping already processed URL: %s' % post.url)
-                continue
-
             for service in self._services:
                 logging.debug('Calling service %s for item %s' % (service.__class__.__name__, post))
                 try:
@@ -210,9 +244,9 @@ class Yummy(object):
 
         # Done processing feed. Save state to data store before returning
         logging.debug('Done processing all urls in feed')
-        #f = open(self._store, 'w')
-        #pickle.dump(self._processed, f)
-        #f.close()
+
+        for service in self._services:
+            service.save_state()
 
 if __name__ == '__main__':
     logging.basicConfig(level=LOG_LEVEL)
@@ -233,5 +267,5 @@ if __name__ == '__main__':
     delicious = Delicious(del_username, del_password)
     twitter = Twitter(twit_username, twit_password)
 
-    y = Yummy(state_file, source_url, (delicious, twitter))
+    y = Yummy(source_url, (delicious, twitter))
     y.update()

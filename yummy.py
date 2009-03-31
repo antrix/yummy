@@ -206,21 +206,11 @@ class Yummy(object):
     _endpoint = 'https://api.del.icio.us/v1/posts/add?'
 
     def __init__(self, source_url, services):
-        """`statefile` is where data about which items have already been
-        posted to delicious is saved.
+        """
         `source_url` is the Google Reader feed url from which to pick items
         `services` is a list of objects with an `update` method
         """
-
-        self._store = statefile
-        try:
-            self._processed = pickle.load(open(statefile))
-        except:
-            logging.error('Error loading state file: %s' % statefile)
-            self._processed = set()
-
         self._source_url = source_url
-
         self._services = services
 
     def update(self):
@@ -237,8 +227,6 @@ class Yummy(object):
                     resp = service.update(post)
                 except:
                     logging.error('Service %s failed posting item %s' % (service.__class__.__name__, post))
-                else:
-                    self._processed.add(post.url)
             
             time.sleep(1)
 

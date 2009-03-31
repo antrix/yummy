@@ -36,7 +36,7 @@ config_file = os.path.expanduser('~/.yummy.cfg')
 state_file = os.path.expanduser('~/.yummy.state')
 
 # Set to logging.DEBUG for debug messages
-LOG_LEVEL = logging.INFO
+LOG_LEVEL = logging.DEBUG
 
 # End configuration
 
@@ -95,8 +95,6 @@ class Delicious(object):
     def update(self, post):
         """Updates delicious with the `post`"""
 
-        logging.debug('delicious post called')
-
         params = urllib.urlencode(post)
         logging.debug('Posting url: %s' % self._endpoint + params)
 
@@ -108,6 +106,9 @@ class Delicious(object):
             return False
         except urllib2.URLError, exc:
             logging.error('URL error' % str(exc))
+            return False
+        except Exception:
+            logging.error('Unknown exception', exc_info=True)
             return False
         else:
             result = xml.getroot()
@@ -138,21 +139,22 @@ class Twitter(object):
     def update(self, post):
         """Updates twitter with the `post`"""
 
-        logging.debug('twitter post called for %s' % post)
-
         status = u"%s %s" % (post.description, post.url)
         params = urllib.urlencode({'status': status, 'source': 'yummy'})
 
         logging.debug('Posting url: %s' % self._endpoint + '?' + params)
 
         try:
-            response = self._opener.open(self._endpoint, body=params)
+            response = self._opener.open(self._endpoint, params)
             response = response.read()
         except urllib2.HTTPError, exc:
             logging.error('HTTPError: %d' % (exc.code))
             return False
         except urllib2.URLError, exc:
             logging.error('URL error' % str(exc))
+            return False
+        except Exception, exc:
+            logging.error('Unknown exception', exc_info=True)
             return False
         else:
             if 'created_at' in response:
@@ -204,7 +206,7 @@ class Yummy(object):
                 else:
                     self._processed.add(post.url)
             
-            #time.sleep(1)
+            time.sleep(1)
 
         # Done processing feed. Save state to data store before returning
         logging.debug('Done processing all urls in feed')

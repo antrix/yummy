@@ -36,7 +36,7 @@ config_file = os.path.expanduser('~/.yummy.cfg')
 state_file_prefix = os.path.expanduser('~/.yummy.state')
 
 # Set to logging.DEBUG for debug messages
-LOG_LEVEL = logging.DEBUG
+LOG_LEVEL = logging.INFO
 
 # End configuration
 
@@ -176,7 +176,11 @@ class Twitter(object):
             logging.debug('Skipping already processed URL: %s' % post.url)
             return True
         
-        status = u"%s %s" % (post.description, post.url)
+        if post.extended:
+            status = u"%s %s" % (post.description, post.url)
+        else:
+            status = u"%s. %s %s" % (post.description, post.extended, post.url)
+
         params = urllib.urlencode({'status': status, 'source': 'yummy'})
 
         logging.debug('Posting url: %s' % self._endpoint + '?' + params)
@@ -190,7 +194,7 @@ class Twitter(object):
         except urllib2.URLError, exc:
             logging.error('URL error' % str(exc))
             return False
-        except Exception, exc:
+        except Exception:
             logging.error('Unknown exception', exc_info=True)
             return False
         else:
@@ -203,8 +207,6 @@ class Twitter(object):
                 return False
 
 class Yummy(object):
-    _endpoint = 'https://api.del.icio.us/v1/posts/add?'
-
     def __init__(self, source_url, services):
         """
         `source_url` is the Google Reader feed url from which to pick items

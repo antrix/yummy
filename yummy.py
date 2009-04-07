@@ -176,7 +176,7 @@ class Twitter(object):
             logging.debug('Skipping already processed URL: %s' % post.url)
             return True
         
-        if post.extended:
+        if not post.extended:
             status = u"%s %s" % (post.description, post.url)
         else:
             status = u"%s. %s %s" % (post.description, post.extended, post.url)

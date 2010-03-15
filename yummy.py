@@ -71,6 +71,7 @@ def posts(feed):
         d.description = entry.title
         d.url = entry.link
         d.tags = "linker via:greader" # TODO: this should be configurable
+        d.extended = ''
         for content in entry.content:
             if content.base.startswith(
                     'http://www.google.com/reader/public/atom/user/'):
@@ -147,8 +148,8 @@ class Twitter(object):
     _endpoint = 'https://twitter.com/statuses/update.xml'
 
     def __init__(self, user, pw):
-        """`user` is the delicious user name
-        `pw` is the delicious password
+        """`user` is the twitter user name
+        `pw` is the twitter password
         """
         pass_mgr = urllib2.HTTPPasswordMgrWithDefaultRealm()
         pass_mgr.add_password(None, 'twitter.com', user, pw)
@@ -175,13 +176,27 @@ class Twitter(object):
         if post.url in self._processed:
             logging.debug('Skipping already processed URL: %s' % post.url)
             return True
-        
-        if not post.extended:
-            status = u"%s %s" % (post.description, post.url)
-        else:
-            status = u"%s. %s %s" % (post.description, post.extended, post.url)
 
-        params = urllib.urlencode({'status': status, 'source': 'yummy'})
+        url = post.url
+        try:
+            response = urllib2.urlopen("http://is.gd/api.php?longurl=" + post.url)
+            url = response.read()
+        except urllib2.HTTPError, exc:
+            logging.error('is.gd HTTPError: %d' % exc.code)
+            logging.error('is.gd HTTPError Msg: %s' % exc.read())
+        except urllib2.URLError, exc:
+            logging.error('is.gd URL error' % str(exc), exc_info=True)
+        except Exception:
+            logging.error('is.gd Unknown exception', exc_info=True)
+        
+        if post.extended:
+            status = u"%s. %s %s" % (post.description, post.extended, url)
+            if len(status) > 140:
+                status = u"%s %s" % (post.description, url)
+        else:
+            status = u"%s %s" % (post.description, url)
+
+        params = urllib.urlencode({'status': status.encode('utf-8'), 'source': 'yummy'})
 
         logging.debug('Posting url: %s' % self._endpoint + '?' + params)
 
@@ -189,13 +204,14 @@ class Twitter(object):
             response = self._opener.open(self._endpoint, params)
             response = response.read()
         except urllib2.HTTPError, exc:
-            logging.error('HTTPError: %d' % (exc.code))
+            logging.error('Twitter HTTPError: %d' % exc.code)
+            logging.error('Twitter HTTPError Msg: %s' % exc.read())
             return False
         except urllib2.URLError, exc:
-            logging.error('URL error' % str(exc))
+            logging.error('Twitter URL error' % str(exc), exc_info=True)
             return False
         except Exception:
-            logging.error('Unknown exception', exc_info=True)
+            logging.error('Twitter Unknown exception', exc_info=True)
             return False
         else:
             if 'created_at' in response:
@@ -228,9 +244,9 @@ class Yummy(object):
                 try:
                     resp = service.update(post)
                 except:
-                    logging.error('Service %s failed posting item %s' % (service.__class__.__name__, post))
+                    logging.error('Service %s failed posting item %s' % (service.__class__.__name__, post), exc_info=True)
             
-            time.sleep(1)
+            time.sleep(0.5)
 
         # Done processing feed. Save state to data store before returning
         logging.debug('Done processing all urls in feed')

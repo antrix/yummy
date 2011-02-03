@@ -155,8 +155,9 @@ class Twitter(object):
         pass_mgr.add_password(None, 'twitter.com', user, pw)
         handler = urllib2.HTTPBasicAuthHandler(pass_mgr)
         self._opener = urllib2.build_opener(handler)
-        self._opener.addheaders = [('User-Agent', 
-                       'yummy - greader->twitter poster (%s)' % __version__)]
+        #self._opener.addheaders = [('User-Agent', 
+        #               'yummy - greader->twitter poster (%s)' % __version__)]
+        self._opener.addheaders = [('User-Agent', 'twitterandroid')]
 
         self._store = state_file_prefix + '.twitter'
         try:
@@ -196,7 +197,7 @@ class Twitter(object):
         else:
             status = u"%s %s" % (post.description, url)
 
-        params = urllib.urlencode({'status': status.encode('utf-8'), 'source': 'yummy'})
+        params = urllib.urlencode({'status': status.encode('utf-8'), 'source': 'twitterandroid'})
 
         logging.debug('Posting url: %s' % self._endpoint + '?' + params)
 

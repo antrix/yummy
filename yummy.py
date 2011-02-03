@@ -11,7 +11,7 @@ import xml.etree.cElementTree as ET
 import ConfigParser
 
 __author__      = 'Deepak Sarda'
-__version__     = '0.2'
+__version__     = '0.3'
 __copyright__   = '(c) 2008 Deepak Sarda'
 __license__     = 'Public Domain'
 __url__         = 'http://antrix.net/'
@@ -23,9 +23,9 @@ __url__         = 'http://antrix.net/'
 # [yummy]
 # ; source_url is your public shared items feed url from Google Reader
 # source_url = http://www.google.com/reader/public/atom/user/../broadcast
-# [delicious]
-# user = delicious-user-name
-# pass = delicious-password
+# [pinboard]
+# user = pinboard-user-name
+# pass = pinboard-password
 # [twitter]
 # user = twitter-user-name
 # pass = twitter-password
@@ -83,21 +83,21 @@ def posts(feed):
 # common base-class with save_state() related details
 # moved to base-class
 
-class Delicious(object):
-    _endpoint = 'https://api.del.icio.us/v1/posts/add?'
+class Pinboard(object):
+    _endpoint = 'https://api.pinboard.in/v1/posts/add?'
 
     def __init__(self, user, pw):
-        """`user` is the delicious user name
-        `pw` is the delicious password
+        """`user` is the pinboard user name
+        `pw` is the pinboard password
         """
         pass_mgr = urllib2.HTTPPasswordMgrWithDefaultRealm()
-        pass_mgr.add_password(None, 'api.del.icio.us', user, pw)
+        pass_mgr.add_password(None, 'api.pinboard.in', user, pw)
         handler = urllib2.HTTPBasicAuthHandler(pass_mgr)
         self._opener = urllib2.build_opener(handler)
         self._opener.addheaders = [('User-Agent', 
-                       'yummy - greader->delicious poster (%s)' % __version__)]
+                       'yummy - greader->pinboard poster (%s)' % __version__)]
 
-        self._store = state_file_prefix + '.delicious'
+        self._store = state_file_prefix + '.pinboard'
         try:
             self._processed = pickle.load(open(self._store))
         except:
@@ -110,7 +110,7 @@ class Delicious(object):
         f.close()
 
     def update(self, post):
-        """Updates delicious with the `post`"""
+        """Updates pinboard with the `post`"""
 
         if post.url in self._processed:
             logging.debug('Skipping already processed URL: %s' % post.url)
@@ -140,7 +140,7 @@ class Delicious(object):
                 self._processed.add(post.url)
                 return True
             else:
-                logging.error('Error posting to delicious.' \
+                logging.error('Error posting to pinboard.' \
                         'Response was: %s' % result.get('code'))
                 return False
             
@@ -186,7 +186,7 @@ class Twitter(object):
             logging.error('is.gd HTTPError: %d' % exc.code)
             logging.error('is.gd HTTPError Msg: %s' % exc.read())
         except urllib2.URLError, exc:
-            logging.error('is.gd URL error' % str(exc), exc_info=True)
+            logging.error('is.gd URL error: %s' % str(exc), exc_info=True)
         except Exception:
             logging.error('is.gd Unknown exception', exc_info=True)
         
@@ -256,6 +256,7 @@ class Yummy(object):
             service.save_state()
 
 if __name__ == '__main__':
+
     logging.basicConfig(level=LOG_LEVEL)
 
     config = ConfigParser.ConfigParser()
@@ -265,14 +266,14 @@ if __name__ == '__main__':
 
     source_url = config.get('yummy', 'source_url')
 
-    del_username = config.get('delicious', 'user')
-    del_password = config.get('delicious', 'pass')
+    pin_username = config.get('pinboard', 'user')
+    pin_password = config.get('pinboard', 'pass')
 
     twit_username = config.get('twitter', 'user')
     twit_password = config.get('twitter', 'pass')
 
-    delicious = Delicious(del_username, del_password)
+    pinboard = Pinboard(pin_username, pin_password)
     twitter = Twitter(twit_username, twit_password)
 
-    y = Yummy(source_url, (delicious, twitter))
+    y = Yummy(source_url, (pinboard, twitter))
     y.update()
